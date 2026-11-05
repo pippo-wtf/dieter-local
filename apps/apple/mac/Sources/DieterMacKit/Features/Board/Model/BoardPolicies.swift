@@ -63,12 +63,16 @@ enum KanbanLaneSizing {
     // Lanes never squeeze below a readable card width; the board falls back to
     // horizontal scrolling instead.
     static let minimumWidth: CGFloat = 264
+    // A board narrower than one lane, beside a wide conversation, shows a
+    // whole lane at the board's own width and never a cut-off one.
+    static let narrowBoardMinimumWidth: CGFloat = 180
 
     static func laneWidth(availableWidth: CGFloat, laneCount: Int) -> CGFloat {
         guard laneCount > 0 else { return 0 }
         let gaps = spacing * CGFloat(max(0, laneCount - 1))
         let fittedWidth = (availableWidth - (horizontalPadding * 2) - gaps) / CGFloat(laneCount)
-        return max(minimumWidth, fittedWidth)
+        let wholeLaneWidth = availableWidth - (horizontalPadding * 2)
+        return max(min(minimumWidth, max(narrowBoardMinimumWidth, wholeLaneWidth)), fittedWidth)
     }
 
     static func contentWidth(availableWidth: CGFloat, laneCount: Int) -> CGFloat {

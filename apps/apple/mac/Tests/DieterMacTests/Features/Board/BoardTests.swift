@@ -69,6 +69,14 @@ struct BoardTests {
         #expect(KanbanLaneSizing.contentWidth(availableWidth: 680, laneCount: 4) == 1_111)
     }
 
+    @Test func kanbanLanesFollowABoardNarrowerThanOneLane() {
+        #expect(KanbanLaneSizing.laneWidth(availableWidth: 292, laneCount: 4) == KanbanLaneSizing.minimumWidth)
+        #expect(KanbanLaneSizing.laneWidth(availableWidth: 220, laneCount: 4) == 192)
+        #expect(KanbanLaneSizing.laneWidth(availableWidth: 220, laneCount: 1) == 192)
+        #expect(
+            KanbanLaneSizing.laneWidth(availableWidth: 120, laneCount: 4) == KanbanLaneSizing.narrowBoardMinimumWidth)
+    }
+
     @Test func laneCardPagesBoundTenThousandCardsAndClampAfterDeletion() {
         let first = LaneCardPage.resolve(total: 10_000, requestedPage: 0)
         #expect(first.lowerBound == 0)
