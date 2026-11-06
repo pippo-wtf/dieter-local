@@ -18,6 +18,15 @@ import Testing
     #expect(BoardConversationSizing.maximumRegularWidth(availableWidth: 800) == 580)
 }
 
+@Test func boardConversationGrabReachesAcrossTheGapOntoThePanelEdge() {
+    let reach = BoardConversationSizing.panelGrabReach
+    #expect(reach > DieterMetrics.panelGap)
+    let margin = CGRect(x: 532, y: 0, width: 15, height: 600)
+    #expect(
+        BoardConversationSizing.grabRect(margin, paneLeadingEdge: 540)
+            == CGRect(x: 532, y: 0, width: 8 + reach, height: 600))
+}
+
 @Test func wideBoardsKeepKanbanBesideConversationWorkspace() {
     #expect(!BoardConversationSizing.keepsBoardWithWorkspace(availableWidth: 579))
     #expect(BoardConversationSizing.keepsBoardWithWorkspace(availableWidth: 580))
@@ -264,6 +273,7 @@ func boardConversationUsesABorderlessNativePaneAndRestoresItsDraftAndWidth(prefe
     #expect(controller.boardHost.window === window)
     #expect(controller.inspector.boardBackground.safeAreaInsets.right == 0)
     #expect((split as? BoardConversationSplitView)?.dividerTrackingRect.isEmpty == true)
+    #expect((split as? BoardConversationSplitView)?.dividerGrabRect.isEmpty == true)
     controller.setPresentation(presented: true)
     await settle()
     #expect(abs(controller.inspector.conversationFrame.width - 560) < 2)
@@ -411,6 +421,20 @@ func boardConversationDragStaysBoundedAndNeverHidesTheBoard(preferredWidth: CGFl
     await settle()
     await resizeConversation(to: 480)
     controller.inspector.rememberRegularWidth()
+
+    // The gap beside the floating panel and the panel's own edge start a
+    // resize; the conversation keeps every press further inside.
+    let pane = controller.inspector.conversationFrame
+    func hit(_ offset: CGFloat) -> NSView? {
+        split.hitTest(split.convert(NSPoint(x: pane.minX + offset, y: pane.midY), to: split.superview))
+    }
+    #expect(hit(DieterMetrics.panelGap / 2) === split)
+    #expect(hit(BoardConversationSizing.panelGrabReach - 1) === split)
+    let inside = hit(BoardConversationSizing.panelGrabReach + 12)
+    #expect(inside === host || inside?.isDescendant(of: host) == true)
+    let grab = (split as? BoardConversationSplitView)?.dividerGrabRect ?? .zero
+    #expect(grab.contains(NSPoint(x: pane.minX + BoardConversationSizing.panelGrabReach - 1, y: pane.midY)))
+    #expect(!grab.contains(NSPoint(x: pane.minX + BoardConversationSizing.panelGrabReach + 1, y: pane.midY)))
 
     controller.inspector.dividerDragBegan()
     await resizeConversation(to: split.bounds.width * 0.9)

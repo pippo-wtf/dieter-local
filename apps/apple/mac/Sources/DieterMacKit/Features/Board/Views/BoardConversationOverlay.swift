@@ -22,6 +22,9 @@ enum BoardConversationSizing {
     static let minimumConversationWidthWithWorkspace: CGFloat = 360
     static let maximumConversationWidthWithWorkspace: CGFloat = 1_320
     static let conversationWorkspaceFraction: CGFloat = 0.58
+    /// How far past the divider a press still resizes the conversation: the
+    /// gap up to its floating panel, and the panel's own leading edge.
+    static let panelGrabReach: CGFloat = DieterMetrics.panelGap + 4
     static let widthPreference = "DieterBoardConversationWidth"
     static let workspaceWidthPreference = "DieterBoardConversationWorkspaceWidth"
 
@@ -46,6 +49,12 @@ enum BoardConversationSizing {
             max(regularWidth, minimumConversationWidthWithWorkspace, availableWidth * conversationWorkspaceFraction),
             maximumConversationWidthWithWorkspace,
             availableWidth - minimumBoardWidthWithWorkspace)
+    }
+
+    /// Extends a divider's drag rectangle from the conversation pane's leading
+    /// edge onto its floating panel, so grabbing the panel itself resizes it.
+    static func grabRect(_ rect: CGRect, paneLeadingEdge: CGFloat) -> CGRect {
+        rect.union(CGRect(x: paneLeadingEdge, y: rect.minY, width: panelGrabReach, height: rect.height))
     }
 
     static func restoredWorkspaceWidth(
@@ -243,10 +252,14 @@ final class BoardConversationSplitController: NSSplitViewController {
         _ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect,
         ofDividerAt dividerIndex: Int
     ) -> NSRect {
-        DieterSplitView.effectiveRect(
+        let rect = DieterSplitView.effectiveRect(
             super.splitView(
                 splitView, effectiveRect: proposedEffectiveRect, forDrawnRect: drawnRect, ofDividerAt: dividerIndex),
             in: splitView)
+        // Without a board beside it the panel has nothing to resize against,
+        // and its leading edge belongs to the conversation.
+        guard presented, splitViewItems.count == 2, !boardItem.isCollapsed else { return rect }
+        return BoardConversationSizing.grabRect(rect, paneLeadingEdge: drawnRect.maxX)
     }
 
     override func viewDidLayout() {
@@ -434,10 +447,18 @@ final class BoardConversationSplitView: DieterSplitView {
             width: dividerThickness, height: bounds.height)
     }
 
+    /// Where a press starts a resize: the divider with its margin, the gap and
+    /// the leading edge of the conversation's floating panel.
+    var dividerGrabRect: CGRect {
+        let divider = dividerTrackingRect
+        guard !divider.isEmpty else { return .zero }
+        return BoardConversationSizing.grabRect(
+            divider.insetBy(dx: -DieterSplitView.dragMargin, dy: 0), paneLeadingEdge: divider.minX)
+    }
+
     override func mouseDown(with event: NSEvent) {
         let beganOnDivider =
-            dividerTrackingRect.insetBy(dx: -DieterSplitView.dragMargin, dy: 0).contains(
-                convert(event.locationInWindow, from: nil)) && !boardCollapsed
+            dividerGrabRect.contains(convert(event.locationInWindow, from: nil)) && !boardCollapsed
         if beganOnDivider { onDividerDragBegan?() }
         super.mouseDown(with: event)
         if beganOnDivider { onDividerDragEnded?() }

@@ -28,8 +28,12 @@ struct BoardView: View {
                         kanbanPresented: store.kanbanPresentedAlongsideConversation,
                         toggleKanban: { store.kanbanPresentedAlongsideConversation.toggle() }
                     )
-                    .dieterConversationPanel()
+                    .dieterConversationPanel(edge: .shadow)
                     .padding(.leading, DieterMetrics.panelGap)
+                    .overlay(alignment: .leading) {
+                        BoardConversationResizeGrip()
+                            .opacity(store.kanbanPresentedAlongsideConversation ? 1 : 0)
+                    }
                     .padding(.trailing, DieterMetrics.windowInset)
                     .padding(.bottom, DieterMetrics.windowInset)
                     .environment(store)
@@ -47,6 +51,20 @@ struct BoardView: View {
         .ignoresSafeArea(.container, edges: .top)
     }
 
+}
+
+/// Marks where the conversation panel can be grabbed and resized. The grip sits
+/// in the gap beside the panel and takes no input: the native split owns the
+/// drag, across the gap and on the panel's own edge.
+struct BoardConversationResizeGrip: View {
+    var body: some View {
+        Capsule()
+            .fill(DieterTheme.tertiary.opacity(0.55))
+            .frame(width: 4, height: 36)
+            .frame(width: DieterMetrics.panelGap)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
 }
 
 /// Keep board observations separate from conversation presentation and tokens.

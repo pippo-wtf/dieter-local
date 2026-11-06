@@ -33,14 +33,23 @@ enum DieterTileState: Equatable {
     }
 }
 
+/// How a floating panel separates from the canvas behind it.
+enum DieterPanelEdge {
+    /// A hairline rim, with a soft shadow when the panel is solid.
+    case rim
+    /// A drop shadow and no rim, in glass and solid alike.
+    case shadow
+}
+
 /// A floating L1 panel: the sidebar card, the conversation panel, overlays.
 private struct DieterPanelModifier: ViewModifier {
     let radius: CGFloat
     var shadow = true
+    var edge = DieterPanelEdge.rim
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        let solidShadow = shadow && !DieterTheme.usesTransparency
+        let solidShadow = shadow && edge == .rim && !DieterTheme.usesTransparency
         content
             // Only the panel's own shape casts the solid-mode shadow. A shadow
             // on the content would render every hosted editor offscreen.
@@ -51,10 +60,48 @@ private struct DieterPanelModifier: ViewModifier {
                         color: .black.opacity(solidShadow ? (DieterTheme.isDark ? 0.32 : 0.1) : 0),
                         radius: solidShadow ? 10 : 0, y: solidShadow ? 3 : 0)
             }
+            .background {
+                if edge == .shadow { DieterPanelDropShadow(radius: radius, dark: DieterTheme.isDark) }
+            }
             .glassEffect(
                 DieterTheme.usesTransparency ? .regular.tint(DieterTheme.panelTint) : .identity, in: shape
             )
-            .overlay { shape.strokeBorder(DieterTheme.panelRim, lineWidth: 1).allowsHitTesting(false) }
+            .overlay {
+                shape.strokeBorder(edge == .rim ? DieterTheme.panelRim : .clear, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+/// The drop shadow of a rimless panel. It is drawn outside the panel's shape
+/// only: a glass panel has no fill to cast one, and glass would sample a
+/// shadow drawn beneath it.
+private struct DieterPanelDropShadow: View {
+    let radius: CGFloat
+    let dark: Bool
+
+    private static let blur: CGFloat = 9
+    private static let offset: CGFloat = 3
+    /// How far the canvas extends past the panel to hold the blurred shadow.
+    private static let reach: CGFloat = blur * 2 + offset
+
+    var body: some View {
+        let radius = radius
+        let color = Color.black.opacity(dark ? 0.5 : 0.2)
+        let blur = Self.blur
+        let offset = Self.offset
+        let reach = Self.reach
+        Canvas { context, size in
+            let panel = Path(
+                roundedRect: CGRect(origin: .zero, size: size).insetBy(dx: reach, dy: reach),
+                cornerRadius: radius, style: .continuous)
+            context.clip(to: panel, options: .inverse)
+            context.addFilter(.shadow(color: color, radius: blur, y: offset))
+            context.fill(panel, with: .color(.black))
+        }
+        .padding(-reach)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
@@ -110,8 +157,10 @@ private struct DieterControlChrome<S: InsettableShape>: ViewModifier {
 }
 
 extension View {
-    func dieterPanel(radius: CGFloat = DieterMetrics.panelRadius, shadow: Bool = true) -> some View {
-        modifier(DieterPanelModifier(radius: radius, shadow: shadow))
+    func dieterPanel(
+        radius: CGFloat = DieterMetrics.panelRadius, shadow: Bool = true, edge: DieterPanelEdge = .rim
+    ) -> some View {
+        modifier(DieterPanelModifier(radius: radius, shadow: shadow, edge: edge))
     }
 
     func dieterTile(_ state: DieterTileState = .rest, radius: CGFloat = DieterMetrics.cardRadius) -> some View {
@@ -120,9 +169,11 @@ extension View {
 
     /// Detail content (a conversation, an editor) as a floating glass panel,
     /// clipped to the panel's corners.
-    func dieterConversationPanel(radius: CGFloat = DieterMetrics.panelRadius) -> some View {
+    func dieterConversationPanel(
+        radius: CGFloat = DieterMetrics.panelRadius, edge: DieterPanelEdge = .rim
+    ) -> some View {
         clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
-            .dieterPanel(radius: radius)
+            .dieterPanel(radius: radius, edge: edge)
     }
 
     func dieterInset(radius: CGFloat = 10) -> some View {
